@@ -11,7 +11,6 @@ import {
   uuid,
   VoidCallback
 } from '..';
-
 import http from "http";
 
 type Options = {
@@ -26,19 +25,19 @@ const opts : Options = {
 
 class LightControllerClass {
 
-  name: CharacteristicValue = "Dimmer"; //name of accessory
+  name: CharacteristicValue = "Парилка"; //name of accessory
   pincode: CharacteristicValue = "031-45-154";
   username: CharacteristicValue = "FA:3C:ED:5A:1A:1A"; // MAC like address used by HomeKit to differentiate accessories.
   manufacturer: CharacteristicValue = "[KONTUR.HOME]"; //manufacturer (optional)
-  model: CharacteristicValue = "Dimmer"; //model (optional)
+  model: CharacteristicValue = "v1.0"; //model (optional)
   serialNumber: CharacteristicValue = "170221"; //serial number (optional)
-
   power: CharacteristicValue = false; //current power status
   brightness: CharacteristicValue = 255; //current brightness
 
+  outputLogs = false; //output logs
+
   setPower(status: CharacteristicValue) {
-    if ( status == "true" || status == 1 ) opts.path = "/sec/?cmd=13:" + LightController.brightness; // включение
-    else opts.path = "/sec/?cmd=13:0"; // выключение
+          opts.path = "/sec/?cmd=10:" + Number(status); 
           const request = http.request(opts, (res) => {
               let data = '';
               res.on('data', function (chunk) {
@@ -54,70 +53,42 @@ class LightControllerClass {
           this.power = status;
   }
 
-  getPower() {    
-    opts.path = '/sec/?pt=13&cmd=get'; // считывание состояния 13 порта
-	  const request = http.request(opts, function (res) {
-      let data = '';
+  getPower() { 
+    opts.path = '/sec/?pt=10&cmd=get'
+	const request = http.request(opts, function (res) {
+	    let data = '';
 	    res.on('data', function (chunk) {
 	        data += chunk;
 	    });
 	    res.on('end', function () {
-		if ( Number(data) == 0 ) {
-       LightController.power = false;
-  }
-    else {
-       LightController.power = true;
-    }
-    lightbulb.getCharacteristic(Characteristic.On)!.updateValue(LightController.power);
+    if ( data === 'ON' ) {LightController.power = true;
+    lightAccessory
+   .getService(Service.Lightbulb)!.getCharacteristic(Characteristic.On)!.updateValue(true);}
+
+    else if ( data === 'OFF' ) {LightController.power = false;
+    lightAccessory
+    .getService(Service.Lightbulb)!.getCharacteristic(Characteristic.On)!.updateValue(false);}
       });
-      
   });
   request.on('error', function (e) {
       console.log(e.message);
   });
   request.end();
-  
    return this.power;
   }
 
-  setBrightness(brightness: CharacteristicValue) {
-     opts.path = "/sec/?cmd=13:" + brightness; // установка ярости
-    const request = http.request(opts, function (res) {
-        let data = '';
-        res.on('data', function (chunk) {
-            data += chunk;
-        });
-        res.on('end', function () {
-        });
-    });
-    request.on('error', function (e) {
-        console.log(e.message);
-    });
-    request.end();
+  setBrightness(brightness: CharacteristicValue) { 
+   
     this.brightness = brightness;
   }
 
   getBrightness() { 
-   opts.path = '/sec/?pt=13&cmd=get' // Считывание состояния 13 порта 
-   	const request = http.request(opts, function (res) {
-       	    let data = '';
-	    res.on('data', function (chunk) {
-	        data += chunk;
-	    });
-	    res.on('end', function () {
-        if (Number(data) > 0) {
-        LightController.brightness = data;
-       lightbulb.getCharacteristic(Characteristic.Brightness)!.updateValue(data);}
-      });
- });
-  request.on('error', function (e) {
-      console.log(e.message);
-  });
-  request.end();
+    
     return this.brightness;
   }
 
   identify() { //identify the accessory
+    if(this.outputLogs) console.log("Identify the '%s'", this.name);
   }
 }
 
@@ -152,35 +123,18 @@ lightAccessory.on(AccessoryEventTypes.IDENTIFY, (paired: boolean, callback: Void
   callback();
 });
 
-// Add the actual Lightbulb Service and listen for change events from iOS.
-const lightbulb = lightAccessory.addService(Service.Lightbulb, LightController.name);
-
-  lightbulb.getCharacteristic(Characteristic.On)!
+lightAccessory
+  .addService(Service.Lightbulb, LightController.name) // services exposed to the user should have "names" like "Light" for this case
+  .getCharacteristic(Characteristic.On)!
   .on(CharacteristicEventTypes.SET, (value: CharacteristicValue, callback: CharacteristicSetCallback) => {
     LightController.setPower(value);
     callback();
   })
-  .updateValue(LightController.getPower())
+
   .on(CharacteristicEventTypes.GET, (callback: CharacteristicGetCallback) => {
   callback(null, LightController.getPower());
   });
 
-  lightbulb.addCharacteristic(Characteristic.Brightness)!
-  .setProps({
-   minValue: 0,
-   maxValue: 255,
-   })
-  .on(CharacteristicEventTypes.SET, (value: CharacteristicValue, callback: CharacteristicSetCallback) => {
-    LightController.setBrightness(value);
-    callback();
-  })
-  .on(CharacteristicEventTypes.GET, (callback: CharacteristicGetCallback) => {
-  callback(null, LightController.getBrightness());
-  });
-
-  // обновление значений характеристики происходит при открытии Home App,
-  // для обновления значений характеристики с интервалом 10 сек раскомментить строки
- // setInterval(() => {
-   // LightController.getPower();
-  //  LightController.getBrightness();
- // }, 10000);
+ //  setInterval(function() {  
+ // LightController.getPower();
+ // }, 20000);
