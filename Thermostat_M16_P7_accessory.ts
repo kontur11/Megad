@@ -3,8 +3,10 @@ import {
   AccessoryEventTypes,
   Categories,
   Characteristic,
-  CharacteristicEventTypes, CharacteristicSetCallback, CharacteristicValue,
-  NodeCallback,
+  CharacteristicEventTypes,
+  CharacteristicSetCallback,
+  CharacteristicValue,
+  CharacteristicGetCallback,
   Service,
   uuid,
   VoidCallback
@@ -150,9 +152,8 @@ class ThermoControllerClass {
       });
       res.on("end", function () {
         temp = data.split(":");
-        ThermoController.CurrentTemperature = parseFloat(temp[1]);
-        ThermostatService
-          .getService(Service.Thermostat)!.getCharacteristic(Characteristic.CurrentTemperature)!.updateValue(parseFloat(temp[1]));
+        ThermoController.CurrentTemperature = (Math.round(parseFloat(temp[1]) * 10)) / 10;
+        thermostat.getCharacteristic(Characteristic.CurrentTemperature)!.updateValue(ThermoController.CurrentTemperature);
       });
     });
     request.on("error", function (e: any) {
@@ -169,14 +170,12 @@ class ThermoControllerClass {
         data += chunk;
       });
       res.on("end", () => {
-           if (data == "ON") {
-              ThermoController.CurrentHeatingCoolingState = 1;
-              ThermostatService
-              .getService(Service.Thermostat)!.getCharacteristic(Characteristic.CurrentHeatingCoolingState)!.updateValue(1);
+         if (data == "ON") {
+            ThermoController.CurrentHeatingCoolingState = 1;
+            thermostat.getCharacteristic(Characteristic.CurrentHeatingCoolingState)!.updateValue(1);
         } else if (data == "OFF") {
-              ThermoController.CurrentHeatingCoolingState = 0;
-              ThermostatService
-              .getService(Service.Thermostat)!.getCharacteristic(Characteristic.CurrentHeatingCoolingState)!.updateValue(0);
+            ThermoController.CurrentHeatingCoolingState = 0;
+            thermostat.getCharacteristic(Characteristic.CurrentHeatingCoolingState)!.updateValue(0);
         }
       });
     });
@@ -206,32 +205,31 @@ ThermostatService
   .getService(Service.AccessoryInformation)!
   .setCharacteristic(Characteristic.Manufacturer, "[KONTUR.HOME]")
   .setCharacteristic(Characteristic.Model, "Local-thermo")
-  .setCharacteristic(Characteristic.SerialNumber, "050221");
+  .setCharacteristic(Characteristic.SerialNumber, "170221");
 
 ThermostatService.on(AccessoryEventTypes.IDENTIFY, (paired: boolean, callback: VoidCallback) => {
   ThermoController.identify();
   callback();
 });
 
-ThermostatService
-.addService(Service.Thermostat, ThermoController.name)
-.getCharacteristic(Characteristic.CurrentHeatingCoolingState)!
+const thermostat = ThermostatService.addService(Service.Thermostat, ThermoController.name);
+
+thermostat.getCharacteristic(Characteristic.CurrentHeatingCoolingState)!
   .setProps({
     minValue: 0,
     maxValue: 1,
   })!
-  .on(CharacteristicEventTypes.GET,(callback: NodeCallback<CharacteristicValue>) => {
+  .on(CharacteristicEventTypes.GET,(callback: CharacteristicGetCallback) => {
      callback(null, ThermoController.getCurrentHeatingCoolingState());
    }
   );
 
-ThermostatService.getService(Service.Thermostat)!
-.getCharacteristic(Characteristic.TargetHeatingCoolingState)!
+thermostat.getCharacteristic(Characteristic.TargetHeatingCoolingState)!
   .setProps({
     minValue: 0,
     maxValue: 1,
   })!
-  .on(CharacteristicEventTypes.GET,(callback: NodeCallback<CharacteristicValue>) => {
+  .on(CharacteristicEventTypes.GET,(callback: CharacteristicGetCallback) => {
       callback(null, ThermoController.getTargetHeatingCoolingState());
     }
   )
@@ -242,25 +240,23 @@ ThermostatService.getService(Service.Thermostat)!
     }
   );
 
-ThermostatService.getService(Service.Thermostat)!
-.getCharacteristic(Characteristic.CurrentTemperature)!
+thermostat.getCharacteristic(Characteristic.CurrentTemperature)!
 .setProps({
   minValue: -50,
   maxValue: 150,
 })!
- .on(CharacteristicEventTypes.GET,(callback: NodeCallback<CharacteristicValue>) => {
+ .on(CharacteristicEventTypes.GET,(callback: CharacteristicGetCallback) => {
     callback(null, ThermoController.getCurrentTemperature());
   }
 );
 
-ThermostatService.getService(Service.Thermostat)!
- .getCharacteristic(Characteristic.TargetTemperature)!
+ thermostat.getCharacteristic(Characteristic.TargetTemperature)!
    .setProps({
     minValue: 5,
     maxValue: 33,
     minStep: 0.5,
   })!
-  .on(CharacteristicEventTypes.GET, (callback: NodeCallback<CharacteristicValue>) => {
+  .on(CharacteristicEventTypes.GET, (callback: CharacteristicGetCallback) => {
       callback(null, ThermoController.getTargetTemperature());
     }
   )
